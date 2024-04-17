@@ -1,0 +1,246 @@
+options {
+      STATIC = false;
+      SUPPORT_CLASS_VISIBILITY_PUBLIC = true;
+      ERROR_REPORTING = false;
+      JAVA_UNICODE_ESCAPE = true;
+      UNICODE_INPUT = true;
+      NODE_USES_PARSER = false;
+      VISITOR = false;
+}
+
+PARSER_BEGIN(JSONParser)
+package org.timofeevAS.json;
+
+//javase imports
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+
+public class JSONParser {
+
+    static protected String stripOffQuotes(String quotedString) {
+        return quotedString.substring(1, quotedString.length() - 1);
+    }
+    public static String TRUE_ATOM = stripOffQuotes(tokenImage[K_TRUE]);
+    public static String FALSE_ATOM = stripOffQuotes(tokenImage[K_FALSE]);
+
+    public JSONParser() {
+        super();
+    }
+
+    //cheat to sorta get generics on productions
+    public <A> List<A> array() throws ParseException {
+        return _array();
+    }
+    public <T> Map<String, T> object() throws ParseException {
+        return _object();
+    }
+}
+
+PARSER_END(JSONParser)
+
+TOKEN_MGR_DECLS :
+{
+    static int commentNesting = 0;
+}
+
+// Pls see http://www.ietf.org/rfc/rfc4627.txt for JSON spec details
+
+// white space
+SKIP: {
+        " "
+    |   "\t"
+    |   "\n"
+    |   "\r"
+    |   "\f"
+}
+
+
+// JSON reserved keywords (prefix with K_ to avoid naming conflicts): only lower case allowed!
+TOKEN: {
+        <K_TRUE: "true">
+    |   <K_FALSE: "false">
+    |   <K_NULL: "null">
+}
+
+// JSON operators (prefix with O_ to avoid naming conflicts)
+TOKEN: {
+        <O_OPENBRACE: "{">
+    |   <O_CLOSEBRACE: "}">
+    |   <O_OPENBRACKET: "[">
+    |   <O_CLOSEBRACKET: "]">
+    |   <O_COMMA: ",">
+    |   <O_COLON: ":">
+    |   <O_DOT: ".">
+    |   <O_PLUS: "+">
+    |   <O_MINUS: "-">
+}
+
+// numeric literals
+TOKEN: {
+        <#DIGIT: [
+            //Unicode "DIGIT" characters - more inclusive than Character.isDigit
+            "\u0030"-"\u0039" //DIGIT ZERO - DIGIT NINE
+        ] >
+    |   <#EXP: ["e", "E"] ( <O_PLUS > | <O_MINUS > )? >
+}
+
+// JSON numbers do not support octal or hexadecimal formats
+TOKEN: {
+        <NUMBER:  <INTEGER> | <INTEGER> <FRACTIONAL_DIGITS> | <INTEGER> <EXPONENT> | <INTEGER> <FRACTIONAL_DIGITS> <EXPONENT> >
+    |   <INTEGER: (<O_MINUS>)? ( <DIGITS> ) > //support leading zeros
+    |   <FRACTIONAL_DIGITS: <O_DOT> <DIGITS> >
+    |   <EXPONENT: <EXP> <DIGITS> >
+    |   <DIGITS: ( <DIGIT> )+ >
+}
+
+// string literals
+TOKEN: {
+        <QUOTED_STRING: "\"" ( (~["\"","\\"]) | ("\\" ( ["n","t","b","r","f","\\","\""] ) ) )* "\"">
+    |   <SINGLE_QUOTED_STRING: "\'" ( (~["\'","\\"]) | ("\\" ( ["n","t","b","r","f","\\","\'"] ) ) )* "\'">
+}
+TOKEN: {
+        <IDENTIFIER: <LETTER> (<LETTER> | <DIGIT> | "_")* >
+    |   <#LETTER: [
+            //Unicode "LETTER" characters - as of Javase 6, Unicode 4 is supported
+            //http://www.unicode.org/Public/4.1.0/ucd/NamesList.txt
+            //more inclusive than Character.isLetter
+           "\u0024",          //DOLLAR SIGN
+           "\u005f"          //LOW LINE: spacing underscore
+      ]
+  >
+}
+
+Object parse():
+{
+Object o = null;
+}
+{
+    ( o=_object() | o=_array() )
+    {
+        return o;
+    }
+}
+
+protected Map _object():
+{
+Map m = new LinkedHashMap();
+}
+{
+    <O_OPENBRACE> ( members(m) )? <O_CLOSEBRACE>
+    {
+        return m;
+    }
+}
+
+protected void members(Map m):
+{
+}
+{
+    pair(m) [ <O_COMMA> members(m) ]
+}
+
+protected void pair(Map m):
+{
+Token t = null;
+Object o;
+String fieldName = null;
+}
+{
+    fieldName=fieldName() <O_COLON> o=value()
+    {
+        m.put(fieldName, o);
+    }
+}
+
+protected String fieldName():
+{
+String fieldName = null;
+}
+{
+    (
+      <SINGLE_QUOTED_STRING>
+        {
+          fieldName = stripOffQuotes(token.image);
+        }
+      |
+      <QUOTED_STRING>
+        {
+          fieldName = stripOffQuotes(token.image);
+        }
+      |
+      //some JSON systems now accept 'naked' JSON Objects
+      <IDENTIFIER>
+        {
+          fieldName = token.image;
+        }
+    )
+    {
+      return fieldName;
+    }
+}
+
+protected List _array():
+{
+List a=new ArrayList();
+}
+{
+    <O_OPENBRACKET> ( elements(a) )? <O_CLOSEBRACKET>
+    {
+        Collections.reverse(a);
+        return a;
+    }
+}
+
+protected void elements(List a):
+{
+Object o = null;
+}
+{
+    o=value() [ <O_COMMA> elements(a) ]
+    {
+        a.add(o);
+    }
+}
+
+protected Object value():
+{
+Token t = null;
+Object o = null;
+}
+{
+    (   o=_object()
+    |   o=_array()
+    |   t=<IDENTIFIER> {o = t.image;} //'naked' values, too
+    |   t=<SINGLE_QUOTED_STRING> {o = stripOffQuotes(t.image);}
+    |   t=<QUOTED_STRING> {o = stripOffQuotes(t.image);}
+    |   t=<NUMBER>
+        {
+            try {
+              o = Integer.valueOf(t.image);
+            }
+            catch (NumberFormatException nfe1) {
+                try {
+                     o = new BigInteger(t.image);
+                }
+                catch  (NumberFormatException nfe2) {
+                    try {
+                         o = new BigDecimal(t.image);
+                    }
+                    catch  (NumberFormatException nfe3) {
+                         o = Double.NaN;
+                    }
+                }
+            }
+        }
+    |   <K_TRUE> {o = Boolean.TRUE;}
+    |   <K_FALSE> {o = Boolean.FALSE;}
+    |   <K_NULL> )
+    {
+        return o;
+    }
+}
