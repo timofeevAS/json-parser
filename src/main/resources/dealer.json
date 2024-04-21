@@ -1,0 +1,24 @@
+{
+  "cars": [
+    {
+      "name": "Volvo",
+      "isSold": false,
+      "owner": {
+        "name": "Alexey",
+        "age": 25
+      }
+    },
+    {
+      "name": "Ford",
+      "isSold": true,
+      "owner": {
+        "name": "Andrew",
+        "age": 33
+      }
+    }
+  ],
+  "manager": {
+    "name": "Michael",
+    "age": 29
+  }
+}
