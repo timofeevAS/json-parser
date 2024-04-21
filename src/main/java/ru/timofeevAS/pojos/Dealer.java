@@ -4,18 +4,21 @@ import java.util.ArrayList;
 import java.util.Arrays;
 
 public class Dealer {
+    private ArrayList<String> partners;
     private Car[] cars;
     private Person manager;
 
     public Dealer() {
         this.cars = new Car[]{};
         this.manager = new Person();
+        this.partners = new ArrayList<>();
     }
 
     @Override
     public String toString() {
         return "Dealer{" +
-                "cars=" + Arrays.toString(cars) +
+                "partners=" + partners +
+                ", cars=" + Arrays.toString(cars) +
                 ", manager=" + manager +
                 '}';
     }
