@@ -1,4 +1,5 @@
 {
+  "partners": ["partner1", "partner2", "partner3"],
   "cars": [
     {
       "name": "Volvo",

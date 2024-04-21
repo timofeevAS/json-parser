@@ -79,21 +79,20 @@ public class ParserAdapter {
         for (String fieldName : hashMap.keySet()) {
             Object fieldValue = hashMap.get(fieldName);
             Field field = clazz.getDeclaredField(fieldName);
+            field.setAccessible(true);
 
             if (isPrimitiveBoxingOrString(field.getType())) {
                 // If primitive type
-                field.setAccessible(true);
                 field.set(obj, fieldValue);
             }
             else if (LinkedHashMap.class.isAssignableFrom(fieldValue.getClass())){
                 // If field not primitive such as POJO class
-                field.setAccessible(true);
                 field.set(obj, parsedValueToTClass((LinkedHashMap<String, Object>) hashMap.get(fieldName),field.getType()));
             }
             else if (field.getType().isArray()){
                 // If field is classic array[]
                 Class<?> componentType = field.getType().getComponentType();
-                field.setAccessible(true);
+
                 var refList = (ArrayList<Object>) fieldValue;
                 var array = Array.newInstance(componentType, ((ArrayList<?>) fieldValue).size());
                 int index = 0;
@@ -110,7 +109,26 @@ public class ParserAdapter {
                 }
                 field.set(obj, array);
             }
+            else if(ArrayList.class.isAssignableFrom(field.getType())){
+                // Repeat for array list
+                Class<?> componentType = (Class<?>) ((java.lang.reflect.ParameterizedType) field.getGenericType()).getActualTypeArguments()[0];
+                ArrayList<Object> arrayList = new ArrayList<>();
+                var refList = (ArrayList<Object>) fieldValue;
+                for (Object value : refList) {
+                    if(LinkedHashMap.class.isAssignableFrom(value.getClass())) {
+                        arrayList.add(parsedValueToTClass((LinkedHashMap<String, Object>) value, componentType));
+                    }
+                    else if(isPrimitiveBoxingOrString(value.getClass())){
+                        arrayList.add(value);
+                    }
+                    else{
+                        throw new IllegalArgumentException("Illegal insertion attempt.");
+                    }
+                }
+                field.set(obj, arrayList);
+            }
         }
+
 
         return obj;
     }
